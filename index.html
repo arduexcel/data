@@ -133,7 +133,6 @@
     let currentMode = 'normal'; 
     let currentUser = localStorage.getItem("terminalUser") || "";
     
-    // کاتژمێر 12ی شەو بەهۆی گۆڕانی بەروارەوە خۆی دەبێتەوە بە 1
     const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
     window.onload = async () => {
@@ -282,7 +281,7 @@
         btn.disabled = true;
 
         try {
-            // دۆزینەوەی ئاخیر ژمارەی وەسڵ لەناو داتابەیس بۆ ئەوەی دوای ئەو بێت
+            // گەڕان بەدوای کۆتا ژمارەی وەسڵ بۆ ئەمڕۆ
             const subColRef = db1.collection("Invoices").doc(today).collection("AllInvoices");
             const snap = await subColRef.orderBy("invoiceNo", "desc").limit(1).get();
             
@@ -292,8 +291,8 @@
                 nextInvoiceNo = isNaN(lastNo) ? 1 : lastNo + 1;
             }
 
-            const dateNow = new Date();
-            const dateStr = dateNow.toLocaleDateString('en-GB') + " " + dateNow.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'});
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB') + " " + now.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'});
 
             const data = {
                 invoiceNo: nextInvoiceNo,
@@ -309,7 +308,7 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            // پڕینت
+            // نیشاندانی زانیاری بۆ پڕینت
             document.getElementById('p-inv-no').innerText = "وەسڵی ژمارە: " + nextInvoiceNo;
             document.getElementById('p-num').innerText = num;
             document.getElementById('p-line-type').innerText = "هێڵی: " + line + " (" + type + ")";
@@ -412,7 +411,10 @@
                 status: "canceled", 
                 deleteReason: reason 
             });
-            await db2.collection("Invoices").doc(today).collection("AllInvoices").doc(id).delete();
+            await db2.collection("Invoices").doc(today).collection("AllInvoices").doc(id).update({ 
+                status: "canceled", 
+                deleteReason: reason 
+            });
             openMyReport();
             updateStats();
         } catch (e) { alert("هەڵە لە سڕینەوە"); }

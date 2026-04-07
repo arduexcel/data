@@ -2,10 +2,12 @@
 <html lang="ku" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>سیستەمی وێستگە - وەشانی خێرا</title>
+    <title>سیستەمی وێستگە - وەشانی نوێکراو</title>
     <link rel="icon" type="image/png" href="https://arduexcel.github.io/img/arduecel.ico">
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    
     <style>
         :root { --primary: #3498db; --success: #27ae60; --danger: #e74c3c; --dark: #2c3e50; --warning: #f39c12; --parking: #9b59b6; --fine: #d35400; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f6; margin: 0; padding: 0; direction: rtl; }
@@ -16,7 +18,7 @@
         .stat-card { flex: 1; background: #ebf5fb; padding: 12px; border-radius: 8px; text-align: center; border: 1px solid #d4e6f1; }
         .stat-card h4 { margin: 0; color: #5d6d7e; font-size: 13px; }
         .stat-card p { margin: 5px 0 0; font-size: 17px; font-weight: bold; color: var(--dark); }
-        .top-bar { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .top-bar { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 10px; flex-wrap: wrap; }
         button { cursor: pointer; border-radius: 6px; border: none; font-weight: bold; transition: 0.2s; font-family: inherit; }
         .btn-logout { background: var(--danger); color: white; padding: 8px 15px; }
         .btn-parking { background: var(--parking); color: white; padding: 8px 15px; flex: 1; }
@@ -24,17 +26,24 @@
         .mode-active { border: 2px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.2) inset; filter: brightness(0.8); }
         input, select { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 8px; font-size: 18px; outline: none; box-sizing: border-box; margin-bottom: 10px; }
         .btn-save { width: 100%; padding: 15px; background: var(--success); color: white; font-size: 19px; }
+        
         #carMatchList { background: white; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: none; max-height: 150px; overflow-y: auto; }
         .match-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; }
         .match-item:hover { background: #f0f0f0; }
+
         #report-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 95%; max-height: 85vh; overflow-y: auto; }
+        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 98%; max-height: 85vh; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
+        
         .canceled-row { background: #f2f2f2 !important; color: #999 !important; text-decoration: line-through; }
+        
         #invoice-print { display: none; }
-        @media print { body * { visibility: hidden; } #invoice-print, #invoice-print * { visibility: visible; } #invoice-print { display: block !important; width: 58mm; text-align: center; position: absolute; top: 0; left: 0; } }
-        .user-header { background: #fff; border: 1px solid #3498db; color: #3498db; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+        @media print {
+            body * { visibility: hidden; }
+            #invoice-print, #invoice-print * { visibility: visible; }
+            #invoice-print { display: block !important; width: 58mm; text-align: center; position: absolute; top: 0; left: 0; }
+        }
     </style>
 </head>
 <body>
@@ -50,33 +59,40 @@
 </div>
 
 <div class="container" id="main-content" style="display:none;">
+    <div style="text-align: center; margin-bottom: 10px;">
+        <h4 id="displayEmployeeName" style="margin: 0; color: var(--dark);">بەکارهێنەر: ...</h4>
+    </div>
     <div class="top-bar">
         <button class="btn-logout" onclick="logout()">دەرچوون</button>
-        <div id="displayUserName" class="user-header">بار دەبێت...</div>
-        <button style="background:var(--dark); color:white; padding:8px 15px;" onclick="openMyReport()">ڕاپۆرتی من</button>
-    </div>
-    <div class="top-bar" style="margin-top: 10px;">
         <button id="parkingModeBtn" class="btn-parking" onclick="toggleMode('parking')">🅿️ پارکینگ</button>
         <button id="fineModeBtn" class="btn-fine" onclick="toggleMode('fine')">⚖️ غەرامە</button>
+        <button style="background:var(--dark); color:white; padding:8px 15px;" onclick="openMyReport()">ڕاپۆرتی من</button>
     </div>
+
     <div class="stats-bar">
         <div class="stat-card"><h4>وەسڵەکانت</h4><p id="totalCount">0</p></div>
         <div class="stat-card"><h4>کۆی پارەکەت</h4><p id="totalMoney">0</p></div>
     </div>
-    <input type="text" id="carNumberInput" oninput="searchCarLocally(this.value)" onkeydown="if(event.key==='Enter') handleAction()" placeholder="ژمارەی ئۆتۆمبێل..." autofocus>
+
+    <input type="text" id="carNumberInput" oninput="searchCarLocally(this.value)" placeholder="ژمارەی ئۆتۆمبێل..." autofocus>
+    
     <div id="carMatchList"></div>
+
     <div id="input-fields">
-        <div id="lineTypeWrapper" style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px;">
             <input type="text" id="resLine" placeholder="هێڵ" readonly>
             <input type="text" id="resType" placeholder="جۆر" readonly>
         </div>
+        
         <div style="display:flex; gap:5px;">
-            <input type="number" id="resPrice" readonly placeholder="نرخ" onkeydown="if(event.key==='Enter') handleAction()">
+            <input type="number" id="resPrice" readonly placeholder="نرخ">
             <button id="btnHalf" onclick="makeHalfPrice()" style="background:var(--warning); color:white; width:65px; height:50px; border-radius:8px; display:none;">½</button>
         </div>
-        <input type="text" id="resNote" placeholder="تێبینی وەسڵ" onkeydown="if(event.key==='Enter') handleAction()">
+
+        <input type="text" id="resNote" placeholder="تێبینی وەسڵ">
     </div>
-    <button class="btn-save" id="saveBtn" onclick="handleAction()">خەزن و پڕینت (Enter)</button>
+
+    <button class="btn-save" id="saveBtn" onclick="handleAction()">خەزن و پڕینت</button>
 </div>
 
 <div id="report-modal">
@@ -86,7 +102,7 @@
             <button onclick="closeReport()" style="background:red; color:white; padding:5px 15px;">X</button>
         </div>
         <table>
-            <thead><tr><th>ژ.وەسڵ</th><th>کات</th><th>ژمارە</th><th>هێڵ</th><th>نرخ</th><th>تێبینی</th><th>کردار</th></tr></thead>
+            <thead><tr><th>ژ.وەسڵ</th><th>کات</th><th>ژمارە</th><th>هێڵ</th><th>جۆر</th><th>نرخ</th><th>تێبینی</th><th>کردار</th></tr></thead>
             <tbody id="report-body"></tbody>
         </table>
     </div>
@@ -97,7 +113,7 @@
     <h5 style="font-size:20px; margin:0px 0;"> تێرمناڵی سه‌ره‌كی سلێمانی </h5>
     <h5 id="p-inv-no" style="font-size:20px; margin:0px 0;"></h5>
     <h1 id="p-num" style="font-size:30px; margin:0px 0;"></h1>
-    <h1 id="p-line" style="font-size:30px; margin:0px 0;"></h1>
+    <h1 id="p-line-type" style="font-size:24px; margin:0px 0;"></h1>
     <h2 id="p-price"></h2>
     <h3 id="p-note-txt" style="border: 1px solid black; padding: 5px; display:none;"></h3>
     <p id="p-date" style="font-size:25px;font-weight: bold"></p>
@@ -114,10 +130,8 @@
     const db2 = app2.firestore();
 
     let allCars = [];
-    let currentMode = 'normal';
+    let currentMode = 'normal'; 
     let currentUser = localStorage.getItem("terminalUser") || "";
-    let localTotalMoney = 0;
-    let localTotalCount = 0;
     
     const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
@@ -130,16 +144,20 @@
                 select.innerHTML += `<option value="${doc.data().name}">${doc.data().name}</option>`; 
             }
         });
-
-        const cachedCars = sessionStorage.getItem("cachedCars");
-        if (cachedCars) { allCars = JSON.parse(cachedCars); } 
-        else {
-            const carSnap = await db1.collection("Cars").get();
-            allCars = carSnap.docs.map(doc => doc.data());
-            sessionStorage.setItem("cachedCars", JSON.stringify(allCars));
-        }
+        const carSnap = await db1.collection("Cars").get();
+        allCars = carSnap.docs.map(doc => doc.data());
         if(currentUser) { showMainApp(); }
     };
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            const num = document.getElementById('carNumberInput').value;
+            const price = document.getElementById('resPrice').value;
+            if (num && price && document.getElementById('main-content').style.display !== 'none') {
+                handleAction();
+            }
+        }
+    });
 
     async function login() {
         const name = document.getElementById('userSelect').value;
@@ -159,8 +177,8 @@
     function showMainApp() {
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
-        document.getElementById('displayUserName').innerText = "کارمەند: " + currentUser;
-        fetchInitialStats();
+        document.getElementById('displayEmployeeName').innerText = "بەکارهێنەر: " + currentUser;
+        updateStats();
     }
 
     function logout() { 
@@ -168,41 +186,46 @@
         currentUser = ""; 
         document.getElementById('main-content').style.display = 'none';
         document.getElementById('login-overlay').style.display = 'flex';
-        document.getElementById('userPass').value = "";
+        location.reload(); 
     }
 
     function searchCarLocally(num) {
         const listDiv = document.getElementById('carMatchList');
         listDiv.innerHTML = "";
         listDiv.style.display = "none";
+        
         if(currentMode === 'parking' || !num) { clearCarFields(); return; }
+        
         const matches = allCars.filter(c => String(c.number) === String(num));
-        if(matches.length === 1) { setCarData(matches[0]); } 
-        else if (matches.length > 1) {
+        if(matches.length === 1) { 
+            setCarData(matches[0]); 
+        } else if (matches.length > 1) {
             listDiv.style.display = "block";
             matches.forEach(m => {
                 const div = document.createElement('div');
                 div.className = 'match-item';
-                div.innerHTML = `<span>هێڵی: ${m.line}</span> <span>${m.price} د.ع</span>`;
+                div.innerHTML = `<span>هێڵی: ${m.line} (${m.type})</span> <span>${m.price} د.ع</span>`;
                 div.onclick = () => { setCarData(m); listDiv.style.display = "none"; };
                 listDiv.appendChild(div);
             });
-        } else { clearCarFields(); }
+        } else {
+            clearCarFields();
+        }
     }
 
     function clearCarFields() {
+        document.getElementById('resLine').value = "";
         if(currentMode === 'normal') {
             document.getElementById('resType').value = "";
-            document.getElementById('resLine').value = "";
             document.getElementById('resPrice').value = "";
             document.getElementById('btnHalf').style.display = "none";
         }
     }
 
     function setCarData(match) {
-        document.getElementById('resType').value = match.type;
         document.getElementById('resLine').value = match.line;
-        if(currentMode !== 'fine') {
+        document.getElementById('resType').value = match.type;
+        if(currentMode === 'normal') {
             document.getElementById('resPrice').value = match.price;
             document.getElementById('btnHalf').style.display = (match.type === "پاس") ? "block" : "none";
         }
@@ -218,97 +241,89 @@
             document.getElementById('parkingModeBtn').classList.toggle('mode-active', mode === 'parking');
             document.getElementById('fineModeBtn').classList.toggle('mode-active', mode === 'fine');
         }
-        
+
         const priceField = document.getElementById('resPrice');
         const lineField = document.getElementById('resLine');
         const typeField = document.getElementById('resType');
         const noteField = document.getElementById('resNote');
-        const lineTypeWrapper = document.getElementById('lineTypeWrapper');
 
-        if(currentMode === 'parking') { 
-            priceField.readOnly = false; 
-            lineField.value = "پارکینگ"; 
+        if(currentMode === 'parking') {
+            priceField.readOnly = false;
+            lineField.value = "پارکینگ";
             typeField.value = "پارکینگ";
             noteField.value = "";
-            lineTypeWrapper.style.display = "none";
-        }
-        else if(currentMode === 'fine') { 
-            priceField.readOnly = false; 
-            lineField.value = "غەرامە"; 
-            typeField.value = "غەرامە"; 
-            noteField.value = "غەرامە"; // نوسینی غەرامە لە تێبینی
-            lineTypeWrapper.style.display = "flex";
-        }
-        else { 
-            priceField.readOnly = true; 
-            lineField.value = ""; 
-            typeField.value = ""; 
+        } else if(currentMode === 'fine') {
+            priceField.readOnly = false;
+            lineField.value = "";
+            typeField.value = "غەرامە";
+            noteField.value = "غەرامە";
+        } else {
+            priceField.readOnly = true;
+            lineField.value = "";
+            typeField.value = "";
             noteField.value = "";
-            lineTypeWrapper.style.display = "flex";
         }
-        resetUI();
+        resetUI(false); 
     }
 
     async function handleAction() {
-        const numInput = document.getElementById('carNumberInput');
-        const priceInput = document.getElementById('resPrice');
-        const num = numInput.value;
-        const price = priceInput.value;
-        
+        const num = document.getElementById('carNumberInput').value;
+        const price = document.getElementById('resPrice').value;
+        const line = document.getElementById('resLine').value;
+        const type = document.getElementById('resType').value;
+        const note = document.getElementById('resNote').value;
+        const today = getTodayStr();
+
         if(!num || !price) return;
-        
+
         const btn = document.getElementById('saveBtn');
         if(btn.disabled) return;
         btn.disabled = true;
-        
+
         try {
-            const today = getTodayStr();
             const subColRef = db1.collection("Invoices").doc(today).collection("AllInvoices");
             const snap = await subColRef.orderBy("invoiceNo", "desc").limit(1).get();
+            
             let nextInvoiceNo = 1;
-            if(!snap.empty) { nextInvoiceNo = (snap.docs[0].data().invoiceNo || 0) + 1; }
-            
+            if(!snap.empty) {
+                nextInvoiceNo = (snap.docs[0].data().invoiceNo || 0) + 1;
+            }
+
             const dateStr = new Date().toLocaleDateString('en-GB') + " " + new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'});
-            
-            let finalLine = document.getElementById('resLine').value || "ئاسایی";
-            // دڵنیابوونەوە کە لە مۆدی پارکینگ هێڵەکە دەبێت بە پارکینگ
-            if(currentMode === 'parking') finalLine = "پارکینگ";
 
             const data = {
-                invoiceNo: nextInvoiceNo, carNumber: num, price: price,
-                line: finalLine,
-                type: document.getElementById('resType').value || "ئاسایی",
-                note: document.getElementById('resNote').value,
-                employee: currentUser, status: "active", date: dateStr, mode: currentMode,
+                invoiceNo: nextInvoiceNo,
+                carNumber: num,
+                price: price,
+                line: line,
+                type: type,
+                note: note,
+                employee: currentUser,
+                status: "active",
+                date: dateStr,
+                mode: currentMode,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
-            
+
+            // پڕینت
             document.getElementById('p-inv-no').innerText = "وەسڵی ژمارە: " + nextInvoiceNo;
             document.getElementById('p-num').innerText = num;
-            document.getElementById('p-line').innerText = data.line;
+            document.getElementById('p-line-type').innerText = "هێڵی: " + line + " (" + type + ")";
             document.getElementById('p-price').innerText = price + " دینار";
             document.getElementById('p-user').innerText = "کارمەند: " + currentUser;
             document.getElementById('p-date').innerText = dateStr;
-            if(data.note) { 
-                document.getElementById('p-note-txt').innerText = "تێبینی: " + data.note; 
-                document.getElementById('p-note-txt').style.display = "block"; 
-            } else { 
-                document.getElementById('p-note-txt').style.display = "none"; 
-            }
+            const pNote = document.getElementById('p-note-txt');
+            if(data.note) { pNote.innerText = "تێبینی: " + data.note; pNote.style.display = "block"; } else { pNote.style.display = "none"; }
 
             window.print();
-            
+
             const newId = subColRef.doc().id;
-            await Promise.all([ 
-                db1.collection("Invoices").doc(today).collection("AllInvoices").doc(newId).set(data), 
-                db2.collection("Invoices").doc(today).collection("AllInvoices").doc(newId).set(data) 
+            await Promise.all([
+                db1.collection("Invoices").doc(today).collection("AllInvoices").doc(newId).set(data),
+                db2.collection("Invoices").doc(today).collection("AllInvoices").doc(newId).set(data)
             ]);
 
-            localTotalCount++; 
-            localTotalMoney += parseInt(price); 
-            updateStatsUI(); 
-            resetUI();
-            
+            resetUI(true);
         } catch (e) { 
             alert("هەڵە: " + e.message); 
         } finally { 
@@ -320,74 +335,95 @@
         const tbody = document.getElementById('report-body');
         tbody.innerHTML = "بار دەبێت...";
         document.getElementById('report-modal').style.display = 'flex';
+        const today = getTodayStr();
+        
         try {
-            const today = getTodayStr();
-            const snap = await db1.collection("Invoices").doc(today).collection("AllInvoices").where("employee", "==", currentUser).get();
+            const snap = await db1.collection("Invoices").doc(today).collection("AllInvoices")
+                                .where("employee", "==", currentUser)
+                                .get();
             tbody.innerHTML = "";
             let docs = [];
             snap.forEach(doc => docs.push({id: doc.id, ...doc.data()}));
             docs.sort((a, b) => b.invoiceNo - a.invoiceNo);
-            if(docs.length === 0) { tbody.innerHTML = "هیچ داتایەک نییە"; return; }
+            
             docs.forEach(d => {
                 const isCanceled = d.status === "canceled";
                 tbody.innerHTML += `<tr class="${isCanceled ? 'canceled-row' : ''}">
-                    <td>${d.invoiceNo}</td><td>${d.date}</td><td>${d.carNumber}</td><td>${d.line}</td><td>${parseInt(d.price).toLocaleString()}</td>
-                    <td>${d.note || '-'}</td><td>${isCanceled ? '-' : `<button onclick="cancelInv('${d.id}', ${d.price})" style="background:red; color:white; padding:3px 7px; border-radius:4px;">سڕینەوە</button>`}</td>
+                    <td>${d.invoiceNo}</td>
+                    <td>${d.date}</td>
+                    <td>${d.carNumber}</td>
+                    <td>${d.line}</td>
+                    <td>${d.type || '-'}</td>
+                    <td>${parseInt(d.price).toLocaleString()}</td>
+                    <td>${d.note || '-'}</td>
+                    <td>${isCanceled ? '-' : `<button onclick="cancelInv('${d.id}')" style="background:red; color:white; padding:3px 7px; border-radius:4px;">سڕینەوە</button>`}</td>
                 </tr>`;
             });
-        } catch (e) { tbody.innerHTML = "هەڵە لە بارکردن: " + e.message; }
+        } catch (e) { tbody.innerHTML = "هەڵە لە بارکردن"; }
     }
 
-    async function fetchInitialStats() {
+    async function updateStats() {
+        const today = getTodayStr();
         try {
-            const today = getTodayStr();
-            const snap = await db1.collection("Invoices").doc(today).collection("AllInvoices").where("employee", "==", currentUser).where("status", "==", "active").get();
-            localTotalMoney = 0; localTotalCount = 0;
-            snap.forEach(doc => { localTotalMoney += parseInt(doc.data().price || 0); localTotalCount++; });
-            updateStatsUI();
+            const snap = await db1.collection("Invoices").doc(today).collection("AllInvoices")
+                                .where("employee", "==", currentUser)
+                                .where("status", "==", "active")
+                                .get();
+            let totalM = 0, totalC = 0;
+            snap.forEach(doc => { totalM += parseInt(doc.data().price || 0); totalC++; });
+            document.getElementById('totalCount').innerText = totalC;
+            document.getElementById('totalMoney').innerText = totalM.toLocaleString() + " د.ع";
         } catch(e) {}
     }
 
-    function updateStatsUI() { 
-        document.getElementById('totalCount').innerText = localTotalCount; 
-        document.getElementById('totalMoney').innerText = localTotalMoney.toLocaleString() + " د.ع"; 
-    }
-    
-    function resetUI() { 
-        document.getElementById('carNumberInput').value = ""; 
-        document.getElementById('resPrice').value = ""; 
+    function resetUI(clearAll) {
+        document.getElementById('carNumberInput').value = "";
         
-        if(currentMode === 'normal') {
-            document.getElementById('resType').value = "";
-            document.getElementById('resLine').value = "";
-            document.getElementById('resNote').value = "";
-        } else if (currentMode === 'parking') {
-            document.getElementById('resNote').value = "";
-        } else if (currentMode === 'fine') {
-            document.getElementById('resNote').value = "غەرامە";
+        if(clearAll) {
+            document.getElementById('resPrice').value = "";
+            if(currentMode === 'normal') {
+                document.getElementById('resNote').value = "";
+                document.getElementById('resType').value = "";
+                document.getElementById('resLine').value = "";
+            } else if (currentMode === 'parking') {
+                document.getElementById('resNote').value = "";
+            } else if (currentMode === 'fine') {
+                document.getElementById('resNote').value = "غەرامە";
+                document.getElementById('resLine').value = "";
+            }
         }
         
-        document.getElementById('carMatchList').style.display = "none"; 
-        setTimeout(() => { document.getElementById('carNumberInput').focus(); }, 100); 
+        document.getElementById('btnHalf').style.display = "none";
+        document.getElementById('carMatchList').style.display = "none";
+        updateStats();
+        setTimeout(() => { document.getElementById('carNumberInput').focus(); }, 150);
+    }
+
+    async function cancelInv(id) {
+        const reason = prompt("هۆکاری سڕینەوە:");
+        if(!reason) return;
+        const today = getTodayStr();
+        try {
+            await db1.collection("Invoices").doc(today).collection("AllInvoices").doc(id).update({ 
+                status: "canceled", 
+                deleteReason: reason 
+            });
+            await db2.collection("Invoices").doc(today).collection("AllInvoices").doc(id).delete();
+            openMyReport();
+            updateStats();
+        } catch (e) { alert("هەڵە لە سڕینەوە"); }
+    }
+
+    function makeHalfPrice() {
+        let pInput = document.getElementById('resPrice');
+        let noteInput = document.getElementById('resNote');
+        let currentPrice = parseInt(pInput.value);
+        if (currentPrice === 6500) { pInput.value = 3000; } else { pInput.value = Math.floor(currentPrice / 2); }
+        noteInput.value = (noteInput.value ? noteInput.value + " - نیوە" : "نیوە");
+        document.getElementById('btnHalf').style.display = "none";
     }
 
     function closeReport() { document.getElementById('report-modal').style.display = 'none'; }
-
-    async function cancelInv(id, price) {
-        const reason = prompt("هۆکاری سڕینەوە:");
-        if(!reason) return;
-        try {
-            const today = getTodayStr();
-            await db1.collection("Invoices").doc(today).collection("AllInvoices").doc(id).update({ status: "canceled", deleteReason: reason });
-            await db2.collection("Invoices").doc(today).collection("AllInvoices").doc(id).delete();
-            localTotalCount--; localTotalMoney -= parseInt(price); updateStatsUI(); openMyReport();
-        } catch (e) { alert("هەڵە لە سڕینەوە"); }
-    }
-    
-    function makeHalfPrice() {
-        let p = document.getElementById('resPrice').value;
-        if(p) document.getElementById('resPrice').value = Math.floor(p / 2);
-    }
 </script>
 </body>
 </html>

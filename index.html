@@ -62,7 +62,7 @@
         <input type="text" id="reportSearchInput" oninput="filterReportByNumber(this.value)" placeholder="گەڕان بە ژمارە..." style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; direction: rtl; box-sizing: border-box;" />
         <table>
           <thead>
-            <tr><th>ژ.وەسڵ</th><th>کات</th><th>ژمارە</th><th>هێڵ</th><th>جۆر</th><th>نرخ</th><th>تێبینی</th><th>کردار</th></tr>
+            <tr><th>ژ.پسوڵه‌</th><th>کات</th><th>ژمارە</th><th>هێڵ</th><th>جۆر</th><th>نرخ</th><th>تێبینی</th><th>کردار</th></tr>
           </thead>
           <tbody id="report-body"></tbody>
         </table>
@@ -84,15 +84,15 @@
     <div id="shift-report-print">
       <img src="https://arduexcel.github.io/img/ms-icon-144x144.png" width="160" />
       
-      <h2 style="margin: 10px 0 5px 0; font-size: 26px;">ڕاپۆرتی کۆتایی </h2>
+      <h2 style="margin: 10px 1 5px 1; font-size: 26px;">ڕاپۆرتی کۆتایی </h2>
       
 
           <p style="margin: 5px 0; font-size: 20px;"><b>کارمەند:</b> <span id="sr-user"></span></p>
-          <p style="margin: 5px 0; font-size: 20px;"><b>بەروار:</b> <span id="sr-date"></span></p>
+          <h3style="margin: 5px 0; font-size: 20px;"><b>بەروار:</b> <span id="sr-date"></span></h3>
           <br>
           <p style="margin: 8px 0; font-size: 22px;"><span id="sr-range"></span></p>
-          <p style="margin: 8px 0; font-size: 22px;"><b>کۆی گشتی وەسڵ:</b> <span id="sr-count"></span></p>
-          <hr style="border: 1px solid #000; margin: 15px 0;">
+          <p style="margin: 8px 0; font-size: 22px;"><b>کۆی گشتی پسوڵه‌:</b> <span id="sr-count"></span></p>
+          <hr style="border: 1px solid #000; margin: 10px 0;">
           <p style="margin: 10px 0; font-size: 24px;"><b>کۆی گشتی پارە:</b> <span id="sr-total"></span></p>
       </div>
     </div>

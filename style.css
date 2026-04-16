@@ -15,21 +15,34 @@ button { cursor: pointer; border-radius: 6px; border: none; font-weight: bold; t
 .mode-active { border: 2px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.2) inset; filter: brightness(0.8); }
 input, select { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 8px; font-size: 18px; outline: none; box-sizing: border-box; margin-bottom: 10px; }
 .btn-save { width: 100%; padding: 15px; background: var(--success); color: white; font-size: 19px; }
-
 #carMatchList { background: white; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: none; max-height: 150px; overflow-y: auto; }
 .match-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; }
 .match-item:hover { background: #f0f0f0; }
-
 #report-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; justify-content: center; align-items: center; }
 .modal-content { background: white; padding: 20px; border-radius: 12px; width: 98%; max-height: 85vh; overflow-y: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
-
 .canceled-row { background: #f2f2f2 !important; color: #999 !important; text-decoration: line-through; }
 
-#invoice-print { display: none; }
+/* شاردنەوەی دیزاینەکان لە شاشەی ئاسایی */
+#invoice-print, #shift-report-print { display: none; }
+
 @media print {
     body * { visibility: hidden; }
+    
+    /* پڕینتی وەسڵی ئاسایی */
     #invoice-print, #invoice-print * { visibility: visible; }
     #invoice-print { display: block !important; width: 58mm; text-align: center; position: absolute; top: 0; left: 0; }
+
+    /* پڕینتی ڕاپۆرتی شەفت (ئەگەر ئەمە نیشان درا) */
+    #shift-report-print, #shift-report-print * { visibility: visible; }
+    #shift-report-print { 
+        display: block !important; 
+        width: 58mm; 
+        text-align: center; 
+        position: absolute; 
+        top: 0; 
+        left: 0; 
+        padding: 5px;
+    }
 }

@@ -177,12 +177,19 @@ async function handleAction() {
     const type = document.getElementById('resType').value;
     const note = document.getElementById('resNote').value;
     const today = getTodayStr();
-
+document.body.classList.add('printing-invoice');
+    window.print();
+    // دوای پڕینت کردن:
+    document.body.classList.remove('printing-invoice');
     if(!num || !price) return;
     const btn = document.getElementById('saveBtn');
     if(btn.disabled) return;
     btn.disabled = true;
-
+document.body.classList.add('printing-report');
+    window.print();
+    // دوای پڕینت کردن:
+    document.body.classList.remove('printing-report');
+}
     try {
         await loadDayCache();
         const subColRef = db1.collection("Invoices").doc(today).collection("AllInvoices");

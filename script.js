@@ -428,7 +428,18 @@ document.addEventListener('click', function(e) {
 
 function toggleMode(mode) {
     if (mode === 'report') {
-        window.location.href = 'https://arduexcel.github.io/data12/';
+        var modal = document.getElementById("myModal");
+        var iframe = document.getElementById("reportFrame");
+        
+        // دانانی لینکی سایتەکە لەناو ئایفرەیمەکە
+        iframe.src = "https://arduexcel.github.io/data12/";
+        
+        // پیشاندانی مۆدێلەکە
+        modal.style.display = "block";
     }
-    // لێرە کۆدەکانی تری فەنکشنەکە بنووسە ئەگەر پێویست بوو
+}
+
+function closeModal() {
+    document.getElementById("myModal").style.display = "none";
+    document.getElementById("reportFrame").src = ""; // بۆ ئەوەی ڤیدیۆ یان دەنگ نەمێنێت کە داخرای
 }

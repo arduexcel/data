@@ -16,6 +16,11 @@ button { cursor: pointer; border-radius: 6px; border: none; font-weight: bold; t
 #monthly-dates { display: none; gap: 10px; margin-bottom: 10px; }
 .mode-active { border: 2px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.2) inset; filter: brightness(0.8); }
 input, select { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 8px; font-size: 18px; outline: none; box-sizing: border-box; margin-bottom: 10px; }
+.car-number-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
+.car-number-row input { flex: 1; min-width: 0; margin-bottom: 0; }
+.province-buttons { display: none; gap: 6px; }
+.province-buttons button { min-width: 96px; padding: 0 10px; background: var(--primary); color: white; font-size: 15px; white-space: nowrap; }
+.province-buttons button.active { background: var(--success); }
 .btn-save { width: 100%; padding: 15px; background: var(--success); color: white; font-size: 19px; }
 
 #carMatchList { background: white; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: none; max-height: 150px; overflow-y: auto; }

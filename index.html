@@ -87,12 +87,22 @@
         </div>
       </div>
 
-      <input
-        type="text"
-        id="carNumberInput"
-        oninput="searchCarLocally(this.value)"
-        placeholder="ژمارەی ئۆتۆمبێل..."
-      />
+      <div class="car-number-row">
+        <input
+          type="text"
+          id="carNumberInput"
+          oninput="searchCarLocally(this.value)"
+          placeholder="ژمارەی ئۆتۆمبێل..."
+        />
+        <div id="provinceButtons" class="province-buttons">
+          <button id="carOptionOne" type="button" onclick="selectCarProvince(0)">
+            سلێمانی
+          </button>
+          <button id="carOptionTwo" type="button" onclick="selectCarProvince(1)">
+            هەولێر
+          </button>
+        </div>
+      </div>
 
       <div id="carMatchList"></div>
 

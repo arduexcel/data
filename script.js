@@ -7,14 +7,75 @@ const config1 = {
   appId: "1:719030469585:web:7a23645b9e684b727dd6f0",
 };
 
+// چالاککردنی داتابەیسی یەکەم
 const app1 = firebase.initializeApp(config1, "a1");
 const db1 = app1.firestore();
 
+// چالاککردنی تایبەتمەندی کارکردن بەبێ ئینتەرنێت (Offline Persistence) بۆ کارکردنی تەواوی ئۆفلاین
+db1.enablePersistence({ synchronizeTabs: true })
+  .catch((err) => {
+    if (err.code == 'failed-precondition') {
+      console.log("Persistence failed: Multiple tabs open.");
+    } else if (err.code == 'unimplemented') {
+      console.log("Persistence is not supported by this browser.");
+    }
+  });
+
 let allCars = [];
-let todayInvoicesList = []; // بۆ پاشەکەوتکردنی تەواوی وەسڵەکانی ئەمڕۆ بە مەبەستی پشکنینی خێرا
 let currentMode = "normal";
 let currentUser = localStorage.getItem("terminalUser") || "";
 let selectedCarProvince = "";
+
+// --- چاودێری ئۆتۆماتیکی دۆخی ئینتەرنێت (سەربەخۆ لە دوگمەی پرینت) ---
+let isOnline = navigator.onLine;
+
+function updateNetworkIndicator() {
+  const dot = document.getElementById("netStatusDot");
+  if (!dot) return;
+  if (isOnline) {
+    dot.style.background = "#27ae60";
+    dot.title = "ئینتەرنێت هەیە";
+  } else {
+    dot.style.background = "#e74c3c";
+    dot.title =
+      "ئینتەرنێت نییە - وەسڵەکان لۆکاڵی خەزن دەکرێن و خۆکارانه دواتر دەنێردرێن";
+  }
+}
+
+window.addEventListener("online", () => {
+  isOnline = true;
+  updateNetworkIndicator();
+});
+window.addEventListener("offline", () => {
+  isOnline = false;
+  updateNetworkIndicator();
+});
+
+// چاوەڕوانبوون بۆ دڵنیابوون لە گەیشتنی وەسڵێک بۆ سێرڤەری ڕاستەقینەی Firebase
+// (نەک تەنها کاشی لۆکاڵی) پێش پرینتکردن. ئەگەر ئینتەرنێت خاو بوو یان نەگەیشت لە کاتی
+// دیاریکراودا، بەبێ ڕاگرتنی کارمەند پرینت بەردەوام دەبێت و خەزنەکە خۆکارانه دواتر دەنێردرێت.
+function confirmServerSync(docRef, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        unsubscribe();
+      } catch (e) {}
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    const unsubscribe = docRef.onSnapshot(
+      { includeMetadataChanges: true },
+      (snap) => {
+        if (!snap.metadata.hasPendingWrites) finish(true);
+      },
+      () => finish(false),
+    );
+  });
+}
 
 const specialCarOptions = {
   38955: [
@@ -27,37 +88,32 @@ const specialCarOptions = {
   ],
 };
 
-// --- Local day-cache ---
-let localMaxInvoiceNo = parseInt(localStorage.getItem("localMaxInvoiceNo")) || 0;
-let localCount = parseInt(localStorage.getItem("localCount")) || 0;
-let localMoney = parseInt(localStorage.getItem("localMoney")) || 0;
-let cacheDay = localStorage.getItem("cacheDay") || null;
+// --- Local day-cache (avoids repeated Firestore reads) ---
+let localMaxInvoiceNo = 0;
+let localCount = 0;
+let localMoney = 0;
+let cacheDay = null; // date string the cache belongs to
 
 const getTodayStr = () => new Date().toLocaleDateString("en-CA");
 
-// هێنانی داتاکان لە سێرڤەرەوە و خەزنکردنی لیستی وەسڵەکانی ئەمڕۆ
+// گۆڕینی کاتی Firestore بۆ فۆرماتی بەرواری ئاسایی YYYY-MM-DD بۆ بەراوردکاری
+function formatFirestoreTimestamp(timestamp) {
+  if (!timestamp) return "";
+  let date;
+  if (typeof timestamp.toDate === "function") {
+    date = timestamp.toDate();
+  } else if (timestamp instanceof Date) {
+    date = timestamp;
+  } else {
+    date = new Date(timestamp);
+  }
+  return date.toLocaleDateString("en-CA");
+}
+
+// لۆدکردنی کاش و داتاکانی ڕۆژ
 async function loadDayCache() {
   const today = getTodayStr();
-  
-  if (cacheDay !== today) {
-    localCount = 0;
-    localMoney = 0;
-    localMaxInvoiceNo = 0;
-    todayInvoicesList = [];
-    cacheDay = today;
-    localStorage.setItem("cacheDay", today);
-    localStorage.removeItem("todayInvoicesList");
-    saveStatsToLocalStorage();
-  } else {
-    // ئەگەر ڕۆژەکە نەگۆڕابوو، لیستەکە لە لۆکاڵەوە بار دەکات بۆ ئەوەی خێرا بێت
-    const savedList = localStorage.getItem("todayInvoicesList");
-    if (savedList) todayInvoicesList = JSON.parse(savedList);
-  }
-
-  if (!navigator.onLine) {
-    return;
-  }
-
+  if (cacheDay === today) return;
   try {
     const snap = await db1
       .collection("Invoices")
@@ -67,12 +123,8 @@ async function loadDayCache() {
     let maxNo = 0,
       cnt = 0,
       money = 0;
-    
-    todayInvoicesList = [];
-    
     snap.forEach((doc) => {
       const d = doc.data();
-      todayInvoicesList.push(d); // خەزنکردنی داتاکان بۆ پشکنینی دووبارە بوونەوە
       const no = parseInt(d.invoiceNo);
       if (!isNaN(no) && no > maxNo) maxNo = no;
       if (d.employee === currentUser && d.status === "active") {
@@ -80,24 +132,13 @@ async function loadDayCache() {
         cnt++;
       }
     });
-    
-    if (maxNo >= localMaxInvoiceNo) {
-      localMaxInvoiceNo = maxNo;
-    }
+    localMaxInvoiceNo = maxNo;
     localCount = cnt;
     localMoney = money;
-    
-    localStorage.setItem("localMaxInvoiceNo", localMaxInvoiceNo);
-    localStorage.setItem("todayInvoicesList", JSON.stringify(todayInvoicesList));
-    saveStatsToLocalStorage();
+    cacheDay = today;
   } catch (e) {
-    console.log("هەڵە لە بارکردنی کاش لە سێرڤەرەوە:", e.message);
+    console.log("تێبینی: کارکردن لە دۆخی ئۆفلایین یان کێشەی هێڵ", e.message);
   }
-}
-
-function saveStatsToLocalStorage() {
-  localStorage.setItem("localCount", localCount);
-  localStorage.setItem("localMoney", localMoney);
 }
 
 function updateStatsDisplay() {
@@ -107,65 +148,30 @@ function updateStatsDisplay() {
 }
 
 window.onload = async () => {
-  // دروستکردنی ئێلیمێنتی نیشاندانی ئاگادارکردنەوەی ئۆتۆمبێلی دووبارە لە ژێر ئینپوتەکە
-  const carNumInput = document.getElementById("carNumberInput");
-  if (carNumInput) {
-    const warningDiv = document.createElement("div");
-    warningDiv.id = "duplicateCarWarning";
-    warningDiv.style.color = "red";
-    warningDiv.style.fontWeight = "bold";
-    warningDiv.style.marginTop = "5px";
-    warningDiv.style.display = "none";
-    warningDiv.innerText = "⚠️ ئەم ئۆتۆمبێلە پێشتر لەم ڕۆژەدا وەسڵی بۆ بڕدراوە!";
-    carNumInput.parentNode.insertBefore(warningDiv, carNumInput.nextSibling);
+  try {
+    const empSnap = await db1.collection("Employees").get();
+    const select = document.getElementById("userSelect");
+    select.innerHTML = '<option value="">ناو هەڵبژێرە...</option>';
+    empSnap.forEach((doc) => {
+      if (doc.data().role === "staff" || doc.data().name === "admin") {
+        select.innerHTML += `<option value="${doc.data().name}">${doc.data().name}</option>`;
+      }
+    });
+  } catch(e) {
+    console.log("خوێندنەوەی کارمەندان لە کاشەوە ئەنجامدرا");
   }
 
-  const cachedCars = localStorage.getItem("cachedCars");
-  if (cachedCars) {
-    allCars = JSON.parse(cachedCars);
-  }
-  const cachedEmployees = localStorage.getItem("cachedEmployees");
-  if (cachedEmployees) {
-    renderEmployeesSelect(JSON.parse(cachedEmployees));
-  }
-
-  if (navigator.onLine) {
-    try {
-      const empSnap = await db1.collection("Employees").get();
-      const emps = [];
-      empSnap.forEach((doc) => {
-        emps.push(doc.data());
-      });
-      localStorage.setItem("cachedEmployees", JSON.stringify(emps));
-      renderEmployeesSelect(emps);
-
-      const carSnap = await db1.collection("Cars").get();
-      allCars = carSnap.docs.map((doc) => doc.data());
-      localStorage.setItem("cachedCars", JSON.stringify(allCars));
-    } catch (e) {
-      console.log("هەڵە لە هێنانی داتای نوێ لە سێرڤەرەوە:", e.message);
-    }
+  try {
+    const carSnap = await db1.collection("Cars").get();
+    allCars = carSnap.docs.map((doc) => doc.data());
+  } catch(e) {
+    console.log("خوێندنەوەی ئۆتۆمبێلەکان لە کاشەوە ئەنجامدرا");
   }
 
   if (currentUser) {
     showMainApp();
   }
-
-  window.addEventListener('online', syncOfflineQueue);
-  if (navigator.onLine) {
-    syncOfflineQueue();
-  }
 };
-
-function renderEmployeesSelect(emps) {
-  const select = document.getElementById("userSelect");
-  select.innerHTML = '<option value="">ناو هەڵبژێرە...</option>';
-  emps.forEach((emp) => {
-    if (emp.role === "staff" || emp.name === "admin") {
-      select.innerHTML += `<option value="${emp.name}">${emp.name}</option>`;
-    }
-  });
-}
 
 document.addEventListener("keydown", function (event) {
   if (event.key === "Enter") {
@@ -185,44 +191,28 @@ async function login() {
   const name = document.getElementById("userSelect").value;
   const pass = document.getElementById("userPass").value;
   if (!name || !pass) return alert("ناو و پاسۆرد بنووسە");
-  
   if (name === "admin" && pass === "0055") {
-    successLogin(name);
+    successLogin("admin");
     return;
   }
-
-  if (navigator.onLine) {
-    try {
-      const snap = await db1
-        .collection("Employees")
-        .where("name", "==", name)
-        .where("password", "==", pass)
-        .get();
-      if (!snap.empty) {
-        successLogin(name);
-      } else {
-        alert("پاسۆردەکە هەڵەیە!");
-      }
-    } catch (e) {
-      fallbackLogin(name, pass);
-    }
-  } else {
-    fallbackLogin(name, pass);
-  }
-}
-
-function fallbackLogin(name, pass) {
-  const cachedEmployees = localStorage.getItem("cachedEmployees");
-  if (cachedEmployees) {
-    const emps = JSON.parse(cachedEmployees);
-    const found = emps.find(emp => emp.name === name && emp.password === pass);
-    if (found) {
+  try {
+    const snap = await db1
+      .collection("Employees")
+      .where("name", "==", name)
+      .where("password", "==", pass)
+      .get();
+    if (!snap.empty) {
       successLogin(name);
     } else {
-      alert("پاسۆردەکە هەڵەیە یاخود داتای ناوخۆیی نییە!");
+      alert("پاسۆردەکە هەڵەیە!");
     }
-  } else {
-    alert("هێڵ نییە و داتای پێشوو خەزن نەکراوە!");
+  } catch(e) {
+    // ڕێگەدان بە چوونەژوورەوە لە کاتی ئۆفلایین ئەگەر لۆکاڵ ستۆریج ڕاست بوو بۆ دڵنیایی زیاتر
+    if (currentUser && currentUser === name) {
+      successLogin(name);
+    } else {
+      alert("پەیوەندی ئینتەرنێت نییە و ناتوانرێت کارمەندی نوێ پشتڕاست بکرێتەوە!");
+    }
   }
 }
 
@@ -235,8 +225,9 @@ function successLogin(name) {
 async function showMainApp() {
   document.getElementById("login-overlay").style.display = "none";
   document.getElementById("main-content").style.display = "block";
-  document.getElementById("displayEmployeeName").innerText =
+  document.getElementById("employeeNameText").innerText =
     "بەکارهێنەر: " + currentUser;
+  updateNetworkIndicator();
   await loadDayCache();
   updateStatsDisplay();
   document.getElementById("carNumberInput").focus();
@@ -250,47 +241,102 @@ function logout() {
   location.reload();
 }
 
-function searchCarLocally(num) {
+// فەنکشنی دیاریکردنی ڕەنگی گونجاو بۆ ئۆتۆمبێلەکە بەپێی کاتی داخڵکردنی فۆرمی داتابەیس (کێڵگەی time)
+function checkCarColorStatus(num, carMatch) {
+  const todayStr = getTodayStr();
+  
+  // ١. پشکنیینی مەرجی یەکەم: ئایا ئۆتۆمبێلەکە هەر ئەمڕۆ لە فۆرمەکەی ترەوە داخڵکراوە؟
+  if (carMatch && carMatch.time) {
+    const carCreatedDay = formatFirestoreTimestamp(carMatch.time);
+    if (carCreatedDay === todayStr) {
+      return "yellow";
+    }
+  }
+  return "none";
+}
+
+// بۆ پشکنینی ئەوەی ئایا ئەمڕۆ پێشتر ئەم ژمارەیە وەسڵی بۆ بڕاوە
+async function isInvoiceRepeatedToday(num) {
+  const today = getTodayStr();
+  try {
+    const snap = await db1
+      .collection("Invoices")
+      .doc(today)
+      .collection("AllInvoices")
+      .where("carNumber", "==", num)
+      .where("status", "==", "active")
+      .get();
+    return !snap.empty;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function searchCarLocally(num) {
   const listDiv = document.getElementById("carMatchList");
-  const warningDiv = document.getElementById("duplicateCarWarning");
   listDiv.innerHTML = "";
   listDiv.style.display = "none";
   
-  updateProvinceButtonsVisibility(num);
-  
-  // لۆجیکی پشکنینی وەسڵی پێشوو لەمڕۆدا بۆ ئەم ژمارەیە
-  if (num && todayInvoicesList.length > 0) {
-    const isDuplicate = todayInvoicesList.some(inv => String(inv.carNumber).trim() === String(num).trim() && inv.status === "active");
-    if (isDuplicate) {
-      if (warningDiv) warningDiv.style.display = "block";
-    } else {
-      if (warningDiv) warningDiv.style.display = "none";
-    }
-  } else {
-    if (warningDiv) warningDiv.style.display = "none";
-  }
+  const inputField = document.getElementById("carNumberInput");
+  inputField.style.backgroundColor = "";
+  inputField.style.color = "";
 
+  updateProvinceButtonsVisibility(num);
   if (currentMode === "parking" || !num) {
     clearCarFields();
     return;
   }
+  
   const matches = allCars.filter((c) => String(c.number) === String(num));
+  let matchedCar = null;
+
   if (matches.length === 1) {
-    setCarData(matches[0]);
+    matchedCar = matches[0];
+    setCarData(matchedCar);
   } else if (matches.length > 1) {
     listDiv.style.display = "block";
     matches.forEach((m) => {
       const div = document.createElement("div");
       div.className = "match-item";
       div.innerHTML = `<span>هێڵی: ${m.line} (${m.type})</span> <span>${m.price} د.ع</span>`;
-      div.onclick = () => {
+      div.onclick = async () => {
         setCarData(m);
         listDiv.style.display = "none";
+        await applyColorLogic(num, m);
       };
       listDiv.appendChild(div);
     });
+    return;
   } else {
     clearCarFields();
+  }
+
+  await applyColorLogic(num, matchedCar);
+}
+
+async function applyColorLogic(num, matchedCar) {
+  const inputField = document.getElementById("carNumberInput");
+  let determinedColor = checkCarColorStatus(num, matchedCar);
+  
+  // ئەگەر زەرد نەبوو، سەیری دەکەین ئایا دووبارەیە بۆ ئەوەی بێتە شین؟
+  if (determinedColor === "none") {
+    const repeated = await isInvoiceRepeatedToday(num);
+    if (repeated) {
+      determinedColor = "blue";
+    }
+  }
+
+  // جێبەجێکردنی ڕەنگەکە لەسەر ڕووکاری دەرەوەی ئینپوتەکە
+  if (determinedColor === "yellow") {
+    inputField.style.backgroundColor = "#f1c40f";
+    inputField.style.color = "#000";
+    inputField.setAttribute("data-color-tag", "yellow");
+  } else if (determinedColor === "blue") {
+    inputField.style.backgroundColor = "#3498db";
+    inputField.style.color = "#fff";
+    inputField.setAttribute("data-color-tag", "blue");
+  } else {
+    inputField.removeAttribute("data-color-tag");
   }
 }
 
@@ -445,9 +491,9 @@ function toggleMode(mode) {
   resetUI(false);
 }
 
-// لۆجیکی خێرا و مۆدێرن بۆ پڕینت بە بێ تەئخیر بوون و پاشەکەوتکردن لە باکگراونددا
-function handleAction() {
-  const num = document.getElementById("carNumberInput").value;
+async function handleAction() {
+  const numInput = document.getElementById("carNumberInput");
+  const num = numInput.value;
   const price = document.getElementById("resPrice").value;
   const line =
     currentMode === "monthly"
@@ -460,16 +506,29 @@ function handleAction() {
   const note = document.getElementById("resNote").value;
   const today = getTodayStr();
 
+  // وەرگرتنی هێمای ڕەنگەکە لە کاتی نووسینی ژمارەکە تا بخرێتە داتابەیسەوە
+  const colorTag = numInput.getAttribute("data-color-tag") || "none";
+
   if (!num || !price) return;
-  if (currentMode === "monthly" && !document.getElementById("resLineSelect").value) {
+  if (
+    currentMode === "monthly" &&
+    !document.getElementById("resLineSelect").value
+  ) {
     alert("تکایە هێڵ هەڵبژێرە");
     return;
   }
-  if (currentMode === "monthly" && !document.getElementById("resTypeSelect").value) {
+  if (
+    currentMode === "monthly" &&
+    !document.getElementById("resTypeSelect").value
+  ) {
     alert("تکایە جۆر هەڵبژێرە");
     return;
   }
-  if (currentMode === "monthly" && (!document.getElementById("resFromDate").value || !document.getElementById("resToDate").value)) {
+  if (
+    currentMode === "monthly" &&
+    (!document.getElementById("resFromDate").value ||
+      !document.getElementById("resToDate").value)
+  ) {
     alert("تکایە بەروارەکان پڕبکەوە");
     return;
   }
@@ -478,120 +537,104 @@ function handleAction() {
   if (btn.disabled) return;
   btn.disabled = true;
 
-  // دیاریکردنی ژمارەی وەسڵی داهاتوو ڕاستەوخۆ لە ڕێگەی لۆکاڵەوە بۆ ئەوەی پرینت خێرا بێت
-  let nextInvoiceNo = localMaxInvoiceNo + 1;
-  localMaxInvoiceNo = nextInvoiceNo; 
-
-  const dateNow = new Date();
-  const dateStr =
-    dateNow.toLocaleDateString("en-GB") +
-    " " +
-    dateNow.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  const data = {
-    invoiceNo: nextInvoiceNo,
-    carNumber: num,
-    price: parseInt(price),
-    line: line,
-    type: type,
-    note: note,
-    employee: currentUser,
-    status: "active",
-    date: dateStr,
-    mode: currentMode,
-  };
-  
-  if (currentMode === "monthly") {
-    data.fromDate = document.getElementById("resFromDate").value.replace(/-/g, "/");
-    data.toDate = document.getElementById("resToDate").value.replace(/-/g, "/");
-  }
-
-  // زیادکردنی وەسڵە نوێیەکە بۆ لیستی ناوخۆیی ئەمڕۆ بۆ ئەوەی ئەگەر دووبارە نوسرا یەکسەر ئاشکرای بکت
-  todayInvoicesList.push(data);
-  localStorage.setItem("todayInvoicesList", JSON.stringify(todayInvoicesList));
-
-  // ئەپدێتکردنی ئامارەکان لەسەر شاشە بە خێرایی لۆکاڵی
-  localCount++;
-  localMoney += parseInt(price);
-  localStorage.setItem("localMaxInvoiceNo", localMaxInvoiceNo);
-  saveStatsToLocalStorage();
-  updateStatsDisplay();
-
-  // پڕکردنەوەی بەشەکانی پسوڵە بۆ چاپکردن
-  document.getElementById("p-inv-no").innerText = "وەسڵی ژمارە: " + nextInvoiceNo;
-  document.getElementById("p-num").innerText = num;
-  document.getElementById("p-line-type").innerText = "هێڵی: " + line + " (" + type + ")";
-  document.getElementById("p-price").innerText = price + " دینار";
-  document.getElementById("p-user").innerText = "کارمەند: " + currentUser;
-  document.getElementById("p-date").innerText = dateStr;
-  
-  const pNote = document.getElementById("p-note-txt");
-  const pMonthly = document.getElementById("p-monthly-dates");
-  
-  if (currentMode === "monthly" && data.fromDate && data.toDate) {
-    pMonthly.innerText = "لە: " + data.fromDate + "  بۆ: " + data.toDate;
-    pMonthly.style.display = "block";
-  } else {
-    pMonthly.style.display = "none";
-  }
-  if (data.note) {
-    pNote.innerText = "تێبینی: " + data.note;
-    pNote.style.display = "block";
-  } else {
-    pNote.style.display = "none";
-  }
-
-  // لێرەدا ڕاستەوخۆ پرینت دەکرێت بێ هێچ دواکەوتنێک!
-  window.print();
-  resetUI(true);
-  btn.disabled = false;
-
-  // لۆجیکی خەزنکردنی باکگراوند (Async Background Save)
-  if (navigator.onLine) {
-    data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-    db1.collection("Invoices")
+  try {
+    await loadDayCache();
+    const subColRef = db1
+      .collection("Invoices")
       .doc(today)
-      .collection("AllInvoices")
-      .add(data)
-      .catch((err) => {
-        console.error("خەزنکردنی باکگراوند سەرکەوتوو نەبوو، دەخرێتە کوی ئۆفلاین:", err);
-        let queue = JSON.parse(localStorage.getItem("offlineInvoiceQueue")) || [];
-        queue.push({ today: today, data: data });
-        localStorage.setItem("offlineInvoiceQueue", JSON.stringify(queue));
+      .collection("AllInvoices");
+    let nextInvoiceNo = localMaxInvoiceNo + 1;
+
+    const dateNow = new Date();
+    const dateStr =
+      dateNow.toLocaleDateString("en-GB") +
+      " " +
+      dateNow.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
       });
-  } else {
-    let queue = JSON.parse(localStorage.getItem("offlineInvoiceQueue")) || [];
-    queue.push({ today: today, data: data });
-    localStorage.setItem("offlineInvoiceQueue", JSON.stringify(queue));
-  }
-}
 
-async function syncOfflineQueue() {
-  if (!navigator.onLine) return;
-  let queue = JSON.parse(localStorage.getItem("offlineInvoiceQueue")) || [];
-  if (queue.length === 0) return;
-
-  console.log(`سیستەم گەڕایەوە سەر هێڵ. ${queue.length} وەسڵ ڕەوانە دەکرێت...`);
-
-  for (let i = 0; i < queue.length; i++) {
-    const item = queue[i];
-    try {
-      item.data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-      await db1
-        .collection("Invoices")
-        .doc(item.today)
-        .collection("AllInvoices")
-        .add(item.data);
-    } catch (err) {
-      console.error("شکست لە هاودەمکردنی وەسڵ:", err);
+    const data = {
+      invoiceNo: nextInvoiceNo,
+      carNumber: num,
+      price: parseInt(price),
+      line: line,
+      type: type,
+      note: note,
+      employee: currentUser,
+      status: "active",
+      date: dateStr,
+      mode: currentMode,
+      colorTag: colorTag, // خەزنکردنی ڕەنگەکە بۆ پیشاندان لە وێبەکانی تریش
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    if (currentMode === "monthly") {
+      data.fromDate = document
+        .getElementById("resFromDate")
+        .value.replace(/-/g, "/");
+      data.toDate = document
+        .getElementById("resToDate")
+        .value.replace(/-/g, "/");
     }
-  }
 
-  localStorage.removeItem("offlineInvoiceQueue");
-  await loadDayCache();
+    // ۱. خەزنکردن لە داتابەیس پێشتر (تەنانەت بەبێ هێڵیش خێرا لۆکاڵ خەزن دەبێت بەهۆی Persistence)
+    const newDocRef = subColRef.doc();
+    await newDocRef.set(data);
+
+    // ۱.۱ ئەگەر ئینتەرنێت هەیە، چاوەڕێی دڵنیابوونی ڕاستەقینەی گەیشتنی وەسڵەکە بۆ سێرڤەری
+    // Firebase دەکەین (نەک تەنها کاشی لۆکاڵی) پێش پرینتکردن. ئەگەر ئۆفلاینین یان درەنگکەوتنی
+    // هەبوو، بەبێ ڕاگرتنی کارمەند پرینت بەردەوام دەبێت و خەزنەکە خۆکارانه دواتر دەنێردرێت
+    // کاتێک ئینتەرنێت گەڕایەوە.
+    if (isOnline) {
+      const synced = await confirmServerSync(newDocRef);
+      if (!synced) {
+        console.log(
+          "سینکی سێرڤەر درەنگ کەوت بۆ وەسڵی ژمارە " +
+            nextInvoiceNo +
+            " - لۆکاڵی خەزنکراوە، خۆکارانه دواتر دەنێردرێت.",
+        );
+      }
+    }
+
+    // ۲. پاشان ڕێکخستنی وایەرکاتی ڕووکاری پرینتەکە دوای دڵنیابوون لە پرۆسەی خەزنکردن
+    document.getElementById("p-inv-no").innerText =
+      "وەسڵی ژمارە: " + nextInvoiceNo;
+    document.getElementById("p-num").innerText = num;
+    document.getElementById("p-line-type").innerText =
+      "هێڵی: " + line + " (" + type + ")";
+    document.getElementById("p-price").innerText = price + " دینار";
+    document.getElementById("p-user").innerText = "کارمەند: " + currentUser;
+    document.getElementById("p-date").innerText = dateStr;
+    const pNote = document.getElementById("p-note-txt");
+    const pMonthly = document.getElementById("p-monthly-dates");
+    if (currentMode === "monthly" && data.fromDate && data.toDate) {
+      pMonthly.innerText = "لە: " + data.fromDate + "  بۆ: " + data.toDate;
+      pMonthly.style.display = "block";
+    } else {
+      pMonthly.style.display = "none";
+    }
+    if (data.note) {
+      pNote.innerText = "تێبینی: " + data.note;
+      pNote.style.display = "block";
+    } else {
+      pNote.style.display = "none";
+    }
+
+    // ۳. جێبەجێکردنی فەرمانی پرینت دوای ئەوەی پاشەکەوت بوو بە سەرکەوتوویی
+    window.print();
+
+    // نوێکردنەوەی ئامارە لۆکاڵییەکان
+    localMaxInvoiceNo = nextInvoiceNo;
+    localCount++;
+    localMoney += parseInt(price);
+    updateStatsDisplay();
+
+    resetUI(true);
+  } catch (e) {
+    alert("هەڵە ڕوویدا لە خەزنکردن: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function filterReportByNumber(val) {
@@ -611,17 +654,6 @@ async function openMyReport() {
   document.getElementById("reportSearchInput").value = "";
   document.getElementById("report-modal").style.display = "flex";
   const today = getTodayStr();
-
-  // پەرەپێدانی بەشی ڕاپۆرت بۆ ئەوەی لە کاتی ئۆفلاینیشدا کاربکات لە سەر داتای لۆکاڵ
-  if (!navigator.onLine) {
-    if (todayInvoicesList.length > 0) {
-      renderReportRows(todayInvoicesList.filter(d => d.employee === currentUser));
-    } else {
-      tbody.innerHTML = "<tr><td colspan='8'>هێڵ نییە و هیچ داتایەک لە کاشدا پاشەکەوت نەکراوە!</td></tr>";
-    }
-    return;
-  }
-
   try {
     const snap = await db1
       .collection("Invoices")
@@ -632,37 +664,38 @@ async function openMyReport() {
     let docs = [];
     snap.forEach((doc) => docs.push({ id: doc.id, ...doc.data() }));
     
-    renderReportRows(docs);
-  } catch (e) {
-    console.error(e);
-    // ئەگەر فایەربەیس کێشەی دروستکردنی ئیندێکسی هەبوو، لۆکاڵی پیشانی دەدات بۆ ئەوەی ڕاپۆرتەکە سپی نەبێت
-    if (todayInvoicesList.length > 0) {
-      renderReportRows(todayInvoicesList.filter(d => d.employee === currentUser));
-    } else {
-      tbody.innerHTML = "<tr><td colspan='8'>هەڵە لە بارکردنی ڕاپۆرت لە سێرڤەرەوە.</td></tr>";
-    }
-  }
-}
+    docs.sort(
+      (a, b) => (parseInt(b.invoiceNo) || 0) - (parseInt(a.invoiceNo) || 0),
+    );
+    
+    let rows = "";
+    docs.forEach((d) => {
+      const isCanceled = d.status === "canceled";
+      
+      // دیاریکردنی کڵاسی ڕەنگ بۆ ڕاپۆرتەکە بەپێی ئەوەی لە داتابەیس پاشەکەوت بووە
+      let rowColorClass = "";
+      if (!isCanceled) {
+        if (d.colorTag === "yellow") rowColorClass = "row-yellow";
+        else if (d.colorTag === "blue") rowColorClass = "row-blue";
+      } else {
+        rowColorClass = "canceled-row";
+      }
 
-function renderReportRows(docsList) {
-  const tbody = document.getElementById("report-body");
-  docsList.sort((a, b) => (parseInt(b.invoiceNo) || 0) - (parseInt(a.invoiceNo) || 0));
-  
-  let rows = "";
-  docsList.forEach((d) => {
-    const isCanceled = d.status === "canceled";
-    rows += `<tr class="${isCanceled ? "canceled-row" : ""}">
-              <td>${d.invoiceNo}</td>
-              <td>${d.date}</td>
-              <td>${d.carNumber}</td>
-              <td>${d.line}</td>
-              <td>${d.type || "-"}</td>
-              <td>${parseInt(d.price).toLocaleString()}</td>
-              <td>${d.note || "-"}</td>
-              <td>${isCanceled ? "-" : `<button onclick="cancelInv('${d.id || ''}',${parseInt(d.price)}, ${d.invoiceNo})" style="background:red; color:white; padding:3px 7px; border-radius:4px;">سڕینەوە</button>`}</td>
-          </tr>`;
-  });
-  tbody.innerHTML = rows ? rows : "<tr><td colspan='8'>هیچ وەسڵێک نەدۆزرایەوە.</td></tr>";
+      rows += `<tr class="${rowColorClass}">
+                <td>${d.invoiceNo}</td>
+                <td>${d.date}</td>
+                <td>${d.carNumber}</td>
+                <td>${d.line}</td>
+                <td>${d.type || "-"}</td>
+                <td>${parseInt(d.price).toLocaleString()}</td>
+                <td>${d.note || "-"}</td>
+                <td>${isCanceled ? "-" : `<button onclick="cancelInv('${d.id}',${parseInt(d.price)})" style="background:red; color:white; padding:3px 7px; border-radius:4px;">سڕینەوە</button>`}</td>
+            </tr>`;
+    });
+    tbody.innerHTML = rows;
+  } catch (e) {
+    tbody.innerHTML = "هەڵە لە بارکردن";
+  }
 }
 
 function updateStats() {
@@ -670,12 +703,14 @@ function updateStats() {
 }
 
 function resetUI(clearAll) {
-  document.getElementById("carNumberInput").value = "";
+  const numInput = document.getElementById("carNumberInput");
+  numInput.value = "";
+  numInput.style.backgroundColor = "";
+  numInput.style.color = "";
+  numInput.removeAttribute("data-color-tag");
+
   selectedCarProvince = "";
   updateProvinceButtonsVisibility("");
-  const warningDiv = document.getElementById("duplicateCarWarning");
-  if (warningDiv) warningDiv.style.display = "none";
-
   if (clearAll) {
     document.getElementById("resPrice").value = "";
     if (currentMode === "normal") {
@@ -694,24 +729,18 @@ function resetUI(clearAll) {
       const today = new Date();
       const nextMonth = new Date(today);
       nextMonth.setMonth(nextMonth.getMonth() + 1);
-      document.getElementById("resFromDate").value = today.toLocaleDateString("en-CA");
-      document.getElementById("resToDate").value = nextMonth.toLocaleDateString("en-CA");
+      document.getElementById("resFromDate").value =
+        today.toLocaleDateString("en-CA");
+      document.getElementById("resToDate").value =
+        nextMonth.toLocaleDateString("en-CA");
     }
   }
   document.getElementById("btnHalf").style.display = "none";
   document.getElementById("carMatchList").style.display = "none";
-  document.getElementById("carNumberInput").focus();
+  numInput.focus();
 }
 
-async function cancelInv(id, price, invoiceNo) {
-  if (!navigator.onLine) {
-    alert("ناتوانیت وەسڵ بسڕیتەوە لە کاتی ئۆفلاین بووندا!");
-    return;
-  }
-  if (!id) {
-    alert("ئەم وەسڵە هێشتا بە تەواوی لە سێرڤەر خەزن نەبووە، کەمێکی تر تاقی بکەرەوە.");
-    return;
-  }
+async function cancelInv(id, price) {
   const reason = prompt("هۆکاری سڕینەوە:");
   if (!reason) return;
   const today = getTodayStr();
@@ -726,13 +755,8 @@ async function cancelInv(id, price, invoiceNo) {
         deleteReason: reason,
       });
     
-    // نوێکردنەوەی دۆخی وەسڵەکە لە ناو لیستی لۆکاڵیشدا
-    todayInvoicesList = todayInvoicesList.map(inv => inv.invoiceNo === invoiceNo ? { ...inv, status: "canceled" } : inv);
-    localStorage.setItem("todayInvoicesList", JSON.stringify(todayInvoicesList));
-
     localCount--;
     localMoney -= price;
-    saveStatsToLocalStorage();
     updateStatsDisplay();
     openMyReport();
   } catch (e) {

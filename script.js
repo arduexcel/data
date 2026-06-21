@@ -42,6 +42,12 @@ function updateNetworkIndicator() {
   }
 }
 
+function setDuplicateWarning(show) {
+  const warn = document.getElementById("duplicateWarning");
+  if (!warn) return;
+  warn.style.display = show ? "block" : "none";
+}
+
 window.addEventListener("online", () => {
   isOnline = true;
   updateNetworkIndicator();
@@ -280,6 +286,7 @@ async function searchCarLocally(num) {
   const inputField = document.getElementById("carNumberInput");
   inputField.style.backgroundColor = "";
   inputField.style.color = "";
+  setDuplicateWarning(false);
 
   updateProvinceButtonsVisibility(num);
   if (currentMode === "parking" || !num) {
@@ -331,12 +338,15 @@ async function applyColorLogic(num, matchedCar) {
     inputField.style.backgroundColor = "#f1c40f";
     inputField.style.color = "#000";
     inputField.setAttribute("data-color-tag", "yellow");
+    setDuplicateWarning(false);
   } else if (determinedColor === "blue") {
     inputField.style.backgroundColor = "#3498db";
     inputField.style.color = "#fff";
     inputField.setAttribute("data-color-tag", "blue");
+    setDuplicateWarning(true);
   } else {
     inputField.removeAttribute("data-color-tag");
+    setDuplicateWarning(false);
   }
 }
 
@@ -708,6 +718,7 @@ function resetUI(clearAll) {
   numInput.style.backgroundColor = "";
   numInput.style.color = "";
   numInput.removeAttribute("data-color-tag");
+  setDuplicateWarning(false);
 
   selectedCarProvince = "";
   updateProvinceButtonsVisibility("");

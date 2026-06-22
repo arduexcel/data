@@ -323,28 +323,18 @@ async function searchCarLocally(num) {
 
 async function applyColorLogic(num, matchedCar) {
   const inputField = document.getElementById("carNumberInput");
-  let determinedColor = checkCarColorStatus(num, matchedCar);
-  
-  // ئەگەر زەرد نەبوو، سەیری دەکەین ئایا دووبارەیە بۆ ئەوەی بێتە شین؟
-  if (determinedColor === "none") {
-    const repeated = await isInvoiceRepeatedToday(num);
-    if (repeated) {
-      determinedColor = "blue";
-    }
-  }
 
-  // جێبەجێکردنی ڕەنگەکە لەسەر ڕووکاری دەرەوەی ئینپوتەکە
-  if (determinedColor === "yellow") {
-    inputField.style.backgroundColor = "#f1c40f";
-    inputField.style.color = "#000";
-    inputField.setAttribute("data-color-tag", "yellow");
-    setDuplicateWarning(false);
-  } else if (determinedColor === "blue") {
+  // تەنها سەیری وەسڵەکانی ئەمڕۆ دەکەین بۆ دووبارەبوون
+  const repeated = await isInvoiceRepeatedToday(num);
+
+  if (repeated) {
     inputField.style.backgroundColor = "#3498db";
     inputField.style.color = "#fff";
     inputField.setAttribute("data-color-tag", "blue");
     setDuplicateWarning(true);
   } else {
+    inputField.style.backgroundColor = "";
+    inputField.style.color = "";
     inputField.removeAttribute("data-color-tag");
     setDuplicateWarning(false);
   }

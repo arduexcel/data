@@ -58,8 +58,6 @@ window.addEventListener("offline", () => {
 });
 
 // چاوەڕوانبوون بۆ دڵنیابوون لە گەیشتنی وەسڵێک بۆ سێرڤەری ڕاستەقینەی Firebase
-// (نەک تەنها کاشی لۆکاڵی) پێش پرینتکردن. ئەگەر ئینتەرنێت خاو بوو یان نەگەیشت لە کاتی
-// دیاریکراودا، بەبێ ڕاگرتنی کارمەند پرینت بەردەوام دەبێت و خەزنەکە خۆکارانه دواتر دەنێردرێت.
 function confirmServerSync(docRef, timeoutMs = 4000) {
   return new Promise((resolve) => {
     let settled = false;
@@ -213,7 +211,6 @@ async function login() {
       alert("پاسۆردەکە هەڵەیە!");
     }
   } catch(e) {
-    // ڕێگەدان بە چوونەژوورەوە لە کاتی ئۆفلایین ئەگەر لۆکاڵ ستۆریج ڕاست بوو بۆ دڵنیایی زیاتر
     if (currentUser && currentUser === name) {
       successLogin(name);
     } else {
@@ -247,11 +244,8 @@ function logout() {
   location.reload();
 }
 
-// فەنکشنی دیاریکردنی ڕەنگی گونجاو بۆ ئۆتۆمبێلەکە بەپێی کاتی داخڵکردنی فۆرمی داتابەیس (کێڵگەی time)
 function checkCarColorStatus(num, carMatch) {
   const todayStr = getTodayStr();
-  
-  // ١. پشکنیینی مەرجی یەکەم: ئایا ئۆتۆمبێلەکە هەر ئەمڕۆ لە فۆرمەکەی ترەوە داخڵکراوە؟
   if (carMatch && carMatch.time) {
     const carCreatedDay = formatFirestoreTimestamp(carMatch.time);
     if (carCreatedDay === todayStr) {
@@ -261,7 +255,6 @@ function checkCarColorStatus(num, carMatch) {
   return "none";
 }
 
-// بۆ پشکنینی ئەوەی ئایا ئەمڕۆ پێشتر ئەم ژمارەیە وەسڵی بۆ بڕاوە
 async function isInvoiceRepeatedToday(num) {
   const today = getTodayStr();
   try {
@@ -323,8 +316,6 @@ async function searchCarLocally(num) {
 
 async function applyColorLogic(num, matchedCar) {
   const inputField = document.getElementById("carNumberInput");
-
-  // تەنها سەیری وەسڵەکانی ئەمڕۆ دەکەین بۆ دووبارەبوون
   const repeated = await isInvoiceRepeatedToday(num);
 
   if (repeated) {
@@ -506,7 +497,6 @@ async function handleAction() {
   const note = document.getElementById("resNote").value;
   const today = getTodayStr();
 
-  // وەرگرتنی هێمای ڕەنگەکە لە کاتی نووسینی ژمارەکە تا بخرێتە داتابەیسەوە
   const colorTag = numInput.getAttribute("data-color-tag") || "none";
 
   if (!num || !price) return;
@@ -565,7 +555,7 @@ async function handleAction() {
       status: "active",
       date: dateStr,
       mode: currentMode,
-      colorTag: colorTag, // خەزنکردنی ڕەنگەکە بۆ پیشاندان لە وێبەکانی تریش
+      colorTag: colorTag,
       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     };
     if (currentMode === "monthly") {
@@ -577,26 +567,13 @@ async function handleAction() {
         .value.replace(/-/g, "/");
     }
 
-    // ۱. خەزنکردن لە داتابەیس پێشتر (تەنانەت بەبێ هێڵیش خێرا لۆکاڵ خەزن دەبێت بەهۆی Persistence)
+    // پاشەکەوتکردن بە شێوازی ئۆفلایین بەبێ وەستاندنی پرۆسەکە بۆ وەڵامی سێرڤەر
     const newDocRef = subColRef.doc();
-    await newDocRef.set(data);
+    newDocRef.set(data).catch((err) => {
+      console.log("خەزنکردنی ناوخۆیی (لۆکاڵ): ", err.message);
+    });
 
-    // ۱.۱ ئەگەر ئینتەرنێت هەیە، چاوەڕێی دڵنیابوونی ڕاستەقینەی گەیشتنی وەسڵەکە بۆ سێرڤەری
-    // Firebase دەکەین (نەک تەنها کاشی لۆکاڵی) پێش پرینتکردن. ئەگەر ئۆفلاینین یان درەنگکەوتنی
-    // هەبوو، بەبێ ڕاگرتنی کارمەند پرینت بەردەوام دەبێت و خەزنەکە خۆکارانه دواتر دەنێردرێت
-    // کاتێک ئینتەرنێت گەڕایەوە.
-    if (isOnline) {
-      const synced = await confirmServerSync(newDocRef);
-      if (!synced) {
-        console.log(
-          "سینکی سێرڤەر درەنگ کەوت بۆ وەسڵی ژمارە " +
-            nextInvoiceNo +
-            " - لۆکاڵی خەزنکراوە، خۆکارانه دواتر دەنێردرێت.",
-        );
-      }
-    }
-
-    // ۲. پاشان ڕێکخستنی وایەرکاتی ڕووکاری پرینتەکە دوای دڵنیابوون لە پرۆسەی خەزنکردن
+    // ئامادەکردنی ڕووکاری پسووڵە بۆ پرینت
     document.getElementById("p-inv-no").innerText =
       "وەسڵی ژمارە: " + nextInvoiceNo;
     document.getElementById("p-num").innerText = num;
@@ -620,8 +597,14 @@ async function handleAction() {
       pNote.style.display = "none";
     }
 
-    // ۳. جێبەجێکردنی فەرمانی پرینت دوای ئەوەی پاشەکەوت بوو بە سەرکەوتوویی
-    window.print();
+    // فەرمانی پرینت بە پێی دۆخی ئینتەرنێت:
+    // ئەگەر ئینتەرنێت هەبێت ۱ جار پرینت دەکات، ئەگەر نەبێت ٢ جار بەسەر یەکەوە پرینت دەکات
+    if (isOnline) {
+      window.print();
+    } else {
+      window.print();
+      window.print();
+    }
 
     // نوێکردنەوەی ئامارە لۆکاڵییەکان
     localMaxInvoiceNo = nextInvoiceNo;
@@ -672,7 +655,6 @@ async function openMyReport() {
     docs.forEach((d) => {
       const isCanceled = d.status === "canceled";
       
-      // دیاریکردنی کڵاسی ڕەنگ بۆ ڕاپۆرتەکە بەپێی ئەوەی لە داتابەیس پاشەکەوت بووە
       let rowColorClass = "";
       if (!isCanceled) {
         if (d.colorTag === "yellow") rowColorClass = "row-yellow";
